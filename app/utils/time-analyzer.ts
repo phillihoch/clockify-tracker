@@ -35,6 +35,7 @@ export const groupByDate = (timeEntries: TimeEntry[]) => {
 interface TimePeriod {
   start: string;
   end: string;
+  doesOverlap?: boolean;
 }
 
 interface PeriodWithBreak {
@@ -42,6 +43,7 @@ interface PeriodWithBreak {
   isBreak: boolean;
   start: string;
   end: string;
+  doesOverlap?: boolean;
 }
 
 function summarizeWorkingEntries(
@@ -60,6 +62,9 @@ function summarizeWorkingEntries(
     } else {
       if (currentWorkingEntry) {
         currentWorkingEntry.durationInMinutes += entry.durationInMinutes;
+        currentWorkingEntry.doesOverlap = entry.doesOverlap
+          ? true
+          : currentWorkingEntry.doesOverlap;
         currentWorkingEntry.end = entry.end;
       } else {
         currentWorkingEntry = { ...entry };
@@ -73,6 +78,21 @@ function summarizeWorkingEntries(
   }
 
   return summarizedEntries;
+}
+
+export function calculateTotalWorkTime(timeEntries: TimeEntry[]): number {
+  const getDurationInMinutes = (timeEntry: TimeEntry) => {
+    const start = new Date(timeEntry.timeInterval.start);
+    const end = new Date(timeEntry.timeInterval.end);
+    return (end.getTime() - start.getTime()) / 60000;
+  };
+
+  const totalWorkTime = timeEntries.reduce(
+    (acc, entry) => acc + getDurationInMinutes(entry),
+    0
+  );
+
+  return totalWorkTime;
 }
 
 export function calculatePeriodsWithBreaks(
@@ -91,6 +111,7 @@ export function calculatePeriodsWithBreaks(
       isBreak: false,
       start: currentPeriod.start,
       end: currentPeriod.end,
+      doesOverlap: currentPeriod.doesOverlap,
     });
 
     // Check for break only if it's not the last period
@@ -106,6 +127,7 @@ export function calculatePeriodsWithBreaks(
           isBreak: true,
           start: currentPeriod.end,
           end: nextPeriod.start,
+          doesOverlap: currentPeriod.doesOverlap,
         });
       }
     }
@@ -126,16 +148,30 @@ const sixHoursInMinutes = 6 * 60;
 const nineHoursInMinutes = 9 * 60;
 const tenHoursInMinutes = 10 * 60;
 
-export function checkBreakCompliance(timeEntries: TimeEntry[]): boolean {
+const reasons = {
+  moreThanTenHours: "Your total work time is more than 10 hours",
+  moreThanSixHoursWithoutBreak: "You worked over 6 hours without a break",
+  breakTimeNotEnough30: "Your total break time is less than 30 minutes",
+  breakTimeNotEnough45: "Your total break time is less than 45 minutes",
+};
+
+export function checkBreakCompliance(timeEntries: TimeEntry[]): {
+  valid: boolean;
+  periodsWithBreaks: PeriodWithBreak[];
+  reason?: string;
+} {
   const periods = timeEntries
-    .map((entry) => ({
+    .map((entry, index) => ({
       start: entry.timeInterval.start,
       end: entry.timeInterval.end,
+      doesOverlap: timeEntries[index + 1]
+        ? doTimeEntriesOverlap([entry, timeEntries[index + 1]])
+        : false,
     }))
     .sort((a, b) => {
       return new Date(a.start).getTime() - new Date(b.start).getTime();
     });
-  const periodsWithBreaks = calculatePeriodsWithBreaks(periods);
+  const periodsWithBreaks = calculatePeriodsWithBreaks(periods).reverse();
 
   const totalWorkTime = periodsWithBreaks.reduce(
     (acc, period) => (!period.isBreak ? acc + period.durationInMinutes : acc),
@@ -147,11 +183,15 @@ export function checkBreakCompliance(timeEntries: TimeEntry[]): boolean {
   );
 
   if (totalWorkTime <= sixHoursInMinutes) {
-    return true;
+    return { valid: true, periodsWithBreaks };
   }
 
   if (totalWorkTime > tenHoursInMinutes) {
-    return false;
+    return {
+      valid: false,
+      periodsWithBreaks,
+      reason: reasons.moreThanTenHours,
+    };
   }
 
   // do not work longer than 6 hours without break
@@ -161,7 +201,11 @@ export function checkBreakCompliance(timeEntries: TimeEntry[]): boolean {
       (period) => period.durationInMinutes > sixHoursInMinutes
     )
   ) {
-    return false;
+    return {
+      valid: false,
+      periodsWithBreaks,
+      reason: reasons.moreThanSixHoursWithoutBreak,
+    };
   }
 
   if (
@@ -169,19 +213,27 @@ export function checkBreakCompliance(timeEntries: TimeEntry[]): boolean {
     totalWorkTime <= nineHoursInMinutes
   ) {
     if (totalBreakTime >= 30) {
-      return true;
+      return { valid: true, periodsWithBreaks };
     }
-    return false;
+    return {
+      valid: false,
+      periodsWithBreaks,
+      reason: reasons.breakTimeNotEnough30,
+    };
   }
 
   // CASE: totalWorkTime > 9 hours && totalWorkTime <= 10 hours
   if (totalBreakTime >= 45) {
-    return true;
+    return { valid: true, periodsWithBreaks };
   }
-  return false;
+  return {
+    valid: false,
+    periodsWithBreaks,
+    reason: reasons.breakTimeNotEnough45,
+  };
 }
 
-export function doPeriodsOverlap(timeEntries: TimeEntry[]): boolean {
+export function doTimeEntriesOverlap(timeEntries: TimeEntry[]): boolean {
   const periods = timeEntries
     .map((entry) => ({
       start: entry.timeInterval.start,
@@ -190,6 +242,11 @@ export function doPeriodsOverlap(timeEntries: TimeEntry[]): boolean {
     .sort((a, b) => {
       return new Date(a.start).getTime() - new Date(b.start).getTime();
     });
+
+  return doPeriodsOverlap(periods);
+}
+
+function doPeriodsOverlap(periods: TimePeriod[]): boolean {
   for (let i = 0; i < periods.length; i++) {
     for (let j = i + 1; j < periods.length; j++) {
       const startA = new Date(periods[i].start).getTime();

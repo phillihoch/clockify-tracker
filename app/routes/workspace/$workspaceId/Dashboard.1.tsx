@@ -9,7 +9,10 @@ import { useRef } from "react";
 import { DeleteButton, PrimaryButton } from "~/components/form";
 import { SearchIcon } from "~/components/icons";
 import { formatDuration } from "~/utils/formatter";
-import { checkBreakCompliance, doPeriodsOverlap } from "~/utils/time-analyzer";
+import {
+  checkBreakCompliance,
+  doTimeEntriesOverlap,
+} from "~/utils/time-analyzer";
 import { loader } from "./dashboard";
 
 export default function Dashboard() {
@@ -63,7 +66,7 @@ export default function Dashboard() {
               )}
             </h2>
             <h2>
-              {doPeriodsOverlap(timeEntries) && (
+              {doTimeEntriesOverlap(timeEntries) && (
                 <div className="flex flex-col bg-yellow-200 border-red-600 rounded-md p-4">
                   <h1 className="font-bold">Warning!</h1>
                   <p>This day has overlapping time entries</p>

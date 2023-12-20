@@ -25,7 +25,7 @@ export default function SelectUser() {
   const data = useLoaderData<typeof loader>();
 
   return (
-    <div className="md:flex md:h-[calc(100vh-55px)]">
+    <div className="md:flex md:h-[calc(100vh-59px)]">
       <nav className="bg-primary text-white">
         <ul className="flex md:flex-col">
           <AppNavLink to={`/workspace/${data.workspace.id}/dashboard`}>

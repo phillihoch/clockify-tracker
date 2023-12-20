@@ -18,3 +18,17 @@ export function formatDuration(durationStr: string): string {
 
   return `${formattedHours} ${formattedMinutes}`.trim();
 }
+
+export function formatDurationInMinutes(duration: number): string {
+  if (!duration) {
+    return "Timer running...";
+  }
+
+  const hours = Math.floor(duration / 60);
+  const minutes = duration % 60;
+
+  const formattedHours = hours > 0 ? `${hours}h` : "";
+  const formattedMinutes = minutes > 0 ? `${minutes}m` : "";
+
+  return `${formattedHours} ${formattedMinutes}`.trim();
+}

@@ -7,15 +7,17 @@ import {
   useSearchParams,
 } from "@remix-run/react";
 import classNames from "classnames";
+import dayjs from "dayjs";
 import { useRef } from "react";
 import { PrimaryButton } from "~/components/form";
 import { SearchIcon } from "~/components/icons";
 import { getTimeEntries } from "~/models/clockify.server";
 import { getCurrentMonthString, getFirstAndLastDayOfMonth } from "~/utils/form";
-import { formatDuration } from "~/utils/formatter";
+import { formatDurationInMinutes } from "~/utils/formatter";
 import {
+  calculateTotalWorkTime,
   checkBreakCompliance,
-  doPeriodsOverlap,
+  doTimeEntriesOverlap,
   groupByDate,
 } from "~/utils/time-analyzer";
 
@@ -74,44 +76,87 @@ export default function Dashboard() {
         </PrimaryButton>
       </Form>
       <div>
-        {Object.entries(data.timeEntries).map(([date, timeEntries], index) => (
-          <div
-            key={date}
-            className={classNames("flex gap-1 flex-col", { "mt-4": index })}
-          >
-            <h2 className="font-extrabold">{date}</h2>
-            <h2>
-              {!checkBreakCompliance(timeEntries) && (
-                <div className="flex flex-col bg-red-300 border-red-600 rounded-md p-4">
-                  <h1 className="font-bold">Attention!</h1>
+        {Object.entries(data.timeEntries).map(([date, timeEntries], index) => {
+          const { valid, periodsWithBreaks, reason } =
+            checkBreakCompliance(timeEntries);
+          return (
+            <div
+              key={date}
+              className={classNames("flex gap-1 flex-col", { "mt-6": index })}
+            >
+              <h2 className="font-extrabold text-xl">
+                {date} (
+                {formatDurationInMinutes(calculateTotalWorkTime(timeEntries))})
+              </h2>
+              {!valid && (
+                <div className="flex flex-col bg-red-300 border-red-600 rounded-md p-4 mt-2">
+                  <h3 className="font-bold text-lg">Attention!</h3>
                   <p>This day does not comply with the break policy</p>
+                  {!!reason && (
+                    <ul className="list-disc list-inside">
+                      <li>{reason}</li>
+                    </ul>
+                  )}
                 </div>
               )}
-            </h2>
-            <h2>
-              {doPeriodsOverlap(timeEntries) && (
-                <div className="flex flex-col bg-yellow-200 border-red-600 rounded-md p-4">
+              {doTimeEntriesOverlap(timeEntries) && (
+                <div className="flex flex-col bg-yellow-200 border-red-600 rounded-md p-4 mt-2">
                   <h1 className="font-bold">Warning!</h1>
                   <p>This day has overlapping time entries</p>
                 </div>
               )}
-            </h2>
-            {timeEntries.map((timeEntry) => (
-              <div
-                key={timeEntry.id}
-                className={classNames(
-                  "flex justify-between items-center",
-                  "px-3 py-2 rounded-md border-2 border-primary-light bg-white"
-                )}
-              >
-                <div>{timeEntry.description}</div>
-                <div className="whitespace-nowrap ml-4">
-                  {formatDuration(timeEntry.timeInterval.duration)}
-                </div>
+              <div className="mt-2">
+                {periodsWithBreaks?.map((period, index) => (
+                  <>
+                    <div className="flex items-center text-xs py-1 text-gray-400">
+                      {dayjs(period.end).format("HH:mm")}
+                      <div className="ml-1 flex-grow border-t border-gray-300"></div>
+                    </div>
+                    <div
+                      key={index}
+                      className={classNames(
+                        "flex justify-between items-center",
+                        "px-3 py-2 rounded-md border-2 border-primary-light bg-white",
+                        { "border-dotted bg-transparent": period.isBreak },
+                        { "bg-yellow-200": period.doesOverlap }
+                      )}
+                    >
+                      <div className="flex">
+                        <div className="w-1/2">
+                          {period.isBreak ? "Break" : "Work"}
+                        </div>
+                      </div>
+
+                      <div className="whitespace-nowrap ml-4">
+                        {formatDurationInMinutes(period.durationInMinutes)}
+                      </div>
+                    </div>
+                    {index === periodsWithBreaks.length - 1 && (
+                      <div className="flex items-center text-xs py-1 text-gray-400">
+                        {dayjs(period.start).format("HH:mm")}
+                        <div className="ml-1 flex-grow border-t border-gray-300"></div>
+                      </div>
+                    )}
+                  </>
+                ))}
               </div>
-            ))}
-          </div>
-        ))}
+              {/* {timeEntries.map((timeEntry) => (
+                <div
+                  key={timeEntry.id}
+                  className={classNames(
+                    "flex justify-between items-center",
+                    "px-3 py-2 rounded-md border-2 border-primary-light bg-white"
+                  )}
+                >
+                  <div>{timeEntry.description}</div>
+                  <div className="whitespace-nowrap ml-4">
+                    {formatDuration(timeEntry.timeInterval.duration)}
+                  </div>
+                </div>
+              ))} */}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
