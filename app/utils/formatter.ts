@@ -1,6 +1,7 @@
 export function formatDuration(durationStr: string): string {
+
   if (!durationStr) {
-    return "Timer running...";
+    return "0m";
   }
 
   const durationRegex = /PT(\d+H)?(\d+M)?/;
@@ -21,6 +22,10 @@ export function formatDuration(durationStr: string): string {
 
 export function formatDurationInMinutes(duration: number): string {
   if (!duration) {
+    return "0m";
+  }
+
+  if (duration < 0) {
     return "Timer running...";
   }
 

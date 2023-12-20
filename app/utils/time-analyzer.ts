@@ -82,9 +82,9 @@ function summarizeWorkingEntries(
 
 export function calculateTotalWorkTime(timeEntries: TimeEntry[]): number {
   const getDurationInMinutes = (timeEntry: TimeEntry) => {
-    const start = new Date(timeEntry.timeInterval.start);
-    const end = new Date(timeEntry.timeInterval.end);
-    return (end.getTime() - start.getTime()) / 60000;
+    const start = getTimeWithoutSeconds(timeEntry.timeInterval.start);
+    const end = getTimeWithoutSeconds(timeEntry.timeInterval.end);
+    return (end - start) / 60000;
   };
 
   const totalWorkTime = timeEntries.reduce(
@@ -101,10 +101,9 @@ export function calculatePeriodsWithBreaks(
   const result: PeriodWithBreak[] = [];
   for (let i = 0; i < workPeriods.length; i++) {
     const currentPeriod = workPeriods[i];
-    const currentStart = new Date(currentPeriod.start);
-    const currentEnd = new Date(currentPeriod.end);
-    const currentDuration =
-      (currentEnd.getTime() - currentStart.getTime()) / 60000; // Convert ms to minutes
+    const currentStart = getTimeWithoutSeconds(currentPeriod.start);
+    const currentEnd = getTimeWithoutSeconds(currentPeriod.end);
+    const currentDuration = (currentEnd - currentStart) / 60000; // Convert ms to minutes
 
     result.push({
       durationInMinutes: currentDuration,
@@ -117,9 +116,8 @@ export function calculatePeriodsWithBreaks(
     // Check for break only if it's not the last period
     if (i < workPeriods.length - 1) {
       const nextPeriod = workPeriods[i + 1];
-      const nextStart = new Date(nextPeriod.start);
-      const breakDuration =
-        (nextStart.getTime() - currentEnd.getTime()) / 60000;
+      const nextStart = getTimeWithoutSeconds(nextPeriod.start);
+      const breakDuration = (nextStart - currentEnd) / 60000;
 
       if (breakDuration > 0) {
         result.push({
@@ -127,7 +125,7 @@ export function calculatePeriodsWithBreaks(
           isBreak: true,
           start: currentPeriod.end,
           end: nextPeriod.start,
-          doesOverlap: currentPeriod.doesOverlap,
+          doesOverlap: false,
         });
       }
     }
@@ -135,13 +133,7 @@ export function calculatePeriodsWithBreaks(
 
   const summarized = summarizeWorkingEntries(result);
 
-  // only count as break when at least 15 minutes
-  const summarizedAndFiltered = summarized.filter(
-    (entry) =>
-      !entry.isBreak || (entry.isBreak && entry.durationInMinutes >= 15)
-  );
-
-  return summarizedAndFiltered;
+  return summarized;
 }
 
 const sixHoursInMinutes = 6 * 60;
@@ -194,10 +186,14 @@ export function checkBreakCompliance(timeEntries: TimeEntry[]): {
     };
   }
 
-  // do not work longer than 6 hours without break
-  const workingSessions = periodsWithBreaks.filter((period) => !period.isBreak);
+  // do not work longer than 6 hours without break (break only counts from 15mins up)
+  const filteredPeriodsWithBreaks = periodsWithBreaks.filter(
+    (period) => !period.isBreak || (period.isBreak && period.durationInMinutes >= 15)
+  )
+  const summarizedFilteredPeriodsWithRealBreaks = summarizeWorkingEntries(filteredPeriodsWithBreaks);
+  const realWorkingSessions = summarizedFilteredPeriodsWithRealBreaks.filter((period) => !period.isBreak);
   if (
-    workingSessions.some(
+    realWorkingSessions.some(
       (period) => period.durationInMinutes > sixHoursInMinutes
     )
   ) {
@@ -240,19 +236,30 @@ export function doTimeEntriesOverlap(timeEntries: TimeEntry[]): boolean {
       end: entry.timeInterval.end,
     }))
     .sort((a, b) => {
-      return new Date(a.start).getTime() - new Date(b.start).getTime();
+      return getTimeWithoutSeconds(a.start) - getTimeWithoutSeconds(b.start);
     });
 
   return doPeriodsOverlap(periods);
 }
 
+function getTimeWithoutSeconds(dateString: string) {
+  let date = new Date(dateString);
+  if (date.getSeconds() < 30) {
+    date.setSeconds(0);
+  } else {
+    date.setSeconds(0, 0);
+    date.setMinutes(date.getMinutes() + 1);
+  }
+  return date.getTime();
+}
+
 function doPeriodsOverlap(periods: TimePeriod[]): boolean {
   for (let i = 0; i < periods.length; i++) {
     for (let j = i + 1; j < periods.length; j++) {
-      const startA = new Date(periods[i].start).getTime();
-      const endA = new Date(periods[i].end).getTime();
-      const startB = new Date(periods[j].start).getTime();
-      const endB = new Date(periods[j].end).getTime();
+      const startA = getTimeWithoutSeconds(periods[i].start);
+      const endA = getTimeWithoutSeconds(periods[i].end);
+      const startB = getTimeWithoutSeconds(periods[j].start);
+      const endB = getTimeWithoutSeconds(periods[j].end);
 
       if (startA < endB && endA > startB) {
         return true; // Überschneidung gefunden

@@ -76,14 +76,11 @@ export default function Dashboard() {
         </PrimaryButton>
       </Form>
       <div>
-        {Object.entries(data.timeEntries).map(([date, timeEntries], index) => {
+        {Object.entries(data.timeEntries).map(([date, timeEntries]) => {
           const { valid, periodsWithBreaks, reason } =
             checkBreakCompliance(timeEntries);
           return (
-            <div
-              key={date}
-              className={classNames("flex gap-1 flex-col", { "mt-6": index })}
-            >
+            <div key={date} className={classNames("flex gap-1 flex-col mt-6")}>
               <h2 className="font-extrabold text-xl">
                 {date} (
                 {formatDurationInMinutes(calculateTotalWorkTime(timeEntries))})
@@ -107,7 +104,7 @@ export default function Dashboard() {
               )}
               <div className="mt-2">
                 {periodsWithBreaks?.map((period, index) => (
-                  <>
+                  <div key={index}>
                     <div className="flex items-center text-xs py-1 text-gray-400">
                       {dayjs(period.end).format("HH:mm")}
                       <div className="ml-1 flex-grow border-t border-gray-300"></div>
@@ -115,9 +112,14 @@ export default function Dashboard() {
                     <div
                       key={index}
                       className={classNames(
+                        period.isBreak
+                          ? period.durationInMinutes < 15
+                            ? "bg-red-300 line-through py-0"
+                            : "bg-white"
+                          : "bg-white",
+                        { "border-dotted": period.isBreak },
                         "flex justify-between items-center",
-                        "px-3 py-2 rounded-md border-2 border-primary-light bg-white",
-                        { "border-dotted bg-transparent": period.isBreak },
+                        "px-3 py-2 rounded-md border-2 border-primary-light ",
                         { "bg-yellow-200": period.doesOverlap }
                       )}
                     >
@@ -137,23 +139,9 @@ export default function Dashboard() {
                         <div className="ml-1 flex-grow border-t border-gray-300"></div>
                       </div>
                     )}
-                  </>
+                  </div>
                 ))}
               </div>
-              {/* {timeEntries.map((timeEntry) => (
-                <div
-                  key={timeEntry.id}
-                  className={classNames(
-                    "flex justify-between items-center",
-                    "px-3 py-2 rounded-md border-2 border-primary-light bg-white"
-                  )}
-                >
-                  <div>{timeEntry.description}</div>
-                  <div className="whitespace-nowrap ml-4">
-                    {formatDuration(timeEntry.timeInterval.duration)}
-                  </div>
-                </div>
-              ))} */}
             </div>
           );
         })}
